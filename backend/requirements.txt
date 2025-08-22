@@ -1,0 +1,38 @@
+# Core FastAPI and server dependencies
+fastapi
+uvicorn[standard]
+websockets
+python-multipart
+
+# PDF processing dependencies
+PyPDF2
+pymupdf
+
+# AI and ML dependencies (lightweight versions)
+faiss-cpu
+sentence-transformers
+numpy
+scikit-learn
+networkx
+spacy
+
+# LLM API dependencies
+openai
+google-generativeai
+google-cloud-aiplatform
+
+# HTTP and utility dependencies
+requests
+pydantic
+
+# File handling
+pathlib2
+
+# Development and testing
+pytest
+httpx
+
+# Optional dependencies (uncomment if needed)
+azure-cognitiveservices-speech  # For Azure TTS
+torch # For advanced ML features
+transformers  # For custom models

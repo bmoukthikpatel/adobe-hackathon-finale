@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF.js Fallback Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: white;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-section {
+            background: #2a2a2a;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #1a4a1a; border: 1px solid #4a8a4a; }
+        .error { background: #4a1a1a; border: 1px solid #8a4a4a; }
+        .warning { background: #4a4a1a; border: 1px solid #8a8a4a; }
+        .info { background: #1a1a4a; border: 1px solid #4a4a8a; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0088ff; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        #log {
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔧 PDF.js Robust Fallback System Test</h1>
+        
+        <div class="test-section">
+            <h2>System Status</h2>
+            <div id="system-status">
+                <div class="status info">🔄 Initializing tests...</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>PDF.js Loading Strategies Test</h2>
+            <p>Testing all 7 PDF.js loading strategies:</p>
+            <div id="strategy-results"></div>
+            <button onclick="testAllStrategies()">Test All Strategies</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Network Connectivity Test</h2>
+            <div id="network-status"></div>
+            <button onclick="testNetworkConnectivity()">Test Network</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Local Files Test</h2>
+            <div id="local-files-status"></div>
+            <button onclick="testLocalFiles()">Test Local Files</button>
+        </div>
+
+        <div class="test-section">
+            <h2>PDF Loading Test</h2>
+            <div id="pdf-loading-status"></div>
+            <button onclick="testPDFLoading()">Test PDF Loading</button>
+        </div>
+
+        <div class="test-section">
+            <h2>Debug Log</h2>
+            <div id="log"></div>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+    </div>
+
+    <script>
+        // PDF.js loading strategies (same as in the utility)
+        const PDF_LOADING_STRATEGIES = [
+            {
+                name: 'CDN Latest',
+                workerUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+                libUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+                priority: 1
+            },
+            {
+                name: 'CDN Stable',
+                workerUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.111/pdf.worker.min.js',
+                libUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.111/pdf.min.js',
+                priority: 2
+            },
+            {
+                name: 'JSDelivr',
+                workerUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
+                libUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
+                priority: 3
+            },
+            {
+                name: 'UNPKG',
+                workerUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js',
+                libUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js',
+                priority: 4
+            },
+            {
+                name: 'Local Fallback',
+                workerUrl: '/pdf.worker.min.js',
+                libUrl: '/pdf.min.js',
+                priority: 5
+            },
+            {
+                name: 'Custom Fallback',
+                workerUrl: '/pdf-worker-fallback.js',
+                libUrl: null,
+                priority: 6
+            },
+            {
+                name: 'Embedded Worker',
+                workerUrl: 'data:application/javascript;base64,c2VsZi5vbm1lc3NhZ2U9ZnVuY3Rpb24oZSl7dHJ5e3NlbGYucG9zdE1lc3NhZ2Uoe2FjdGlvbjplLmRhdGEuYWN0aW9uLGRhdGE6bnVsbCxlcnJvcjpudWxsfSl9Y2F0Y2goZSl7c2VsZi5wb3N0TWVzc2FnZSh7YWN0aW9uOiJlcnJvciIsZGF0YTpudWxsLGVycm9yOmUubWVzc2FnZX0pfX0=',
+                libUrl: null,
+                priority: 7
+            }
+        ];
+
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').textContent = '';
+        }
+
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        async function testUrlAccessibility(url, timeout = 5000) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+                
+                const response = await fetch(url, { 
+                    method: 'HEAD',
+                    signal: controller.signal,
+                    cache: 'no-cache'
+                });
+                
+                clearTimeout(timeoutId);
+                return response.ok;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        async function testAllStrategies() {
+            log('🔄 Testing all PDF.js loading strategies...');
+            updateStatus('strategy-results', '🔄 Testing strategies...', 'info');
+            
+            let resultsHtml = '';
+            let successCount = 0;
+            
+            for (const strategy of PDF_LOADING_STRATEGIES) {
+                log(`Testing ${strategy.name}...`);
+                
+                let workerStatus = '❌';
+                let libStatus = '❌';
+                
+                // Test worker URL
+                if (strategy.workerUrl.startsWith('data:') || strategy.workerUrl.startsWith('/')) {
+                    workerStatus = '✅ (Local/Embedded)';
+                } else {
+                    const workerAccessible = await testUrlAccessibility(strategy.workerUrl, 3000);
+                    workerStatus = workerAccessible ? '✅' : '❌';
+                }
+                
+                // Test library URL
+                if (!strategy.libUrl) {
+                    libStatus = '✅ (Bundled)';
+                } else if (strategy.libUrl.startsWith('/')) {
+                    libStatus = '✅ (Local)';
+                } else {
+                    const libAccessible = await testUrlAccessibility(strategy.libUrl, 3000);
+                    libStatus = libAccessible ? '✅' : '❌';
+                }
+                
+                const success = (workerStatus.includes('✅') && libStatus.includes('✅'));
+                if (success) successCount++;
+                
+                resultsHtml += `
+                    <div class="status ${success ? 'success' : 'error'}">
+                        <strong>${strategy.name}</strong> (Priority ${strategy.priority})<br>
+                        Worker: ${workerStatus}<br>
+                        Library: ${libStatus}
+                    </div>
+                `;
+                
+                log(`${strategy.name}: Worker ${workerStatus}, Library ${libStatus}`);
+            }
+            
+            resultsHtml += `<div class="status info"><strong>Summary:</strong> ${successCount}/${PDF_LOADING_STRATEGIES.length} strategies available</div>`;
+            
+            document.getElementById('strategy-results').innerHTML = resultsHtml;
+            log(`✅ Strategy test complete: ${successCount}/${PDF_LOADING_STRATEGIES.length} available`);
+        }
+
+        async function testNetworkConnectivity() {
+            log('🌐 Testing network connectivity...');
+            updateStatus('network-status', '🔄 Testing network...', 'info');
+            
+            const testUrls = [
+                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+                'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',
+                'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js'
+            ];
+            
+            let onlineCount = 0;
+            let resultsHtml = '';
+            
+            for (const url of testUrls) {
+                const accessible = await testUrlAccessibility(url, 5000);
+                if (accessible) onlineCount++;
+                
+                const domain = new URL(url).hostname;
+                resultsHtml += `<div class="status ${accessible ? 'success' : 'error'}">${domain}: ${accessible ? '✅ Online' : '❌ Offline'}</div>`;
+                log(`${domain}: ${accessible ? 'Online' : 'Offline'}`);
+            }
+            
+            const networkStatus = onlineCount > 0 ? 'success' : 'error';
+            const networkMessage = `Network Status: ${onlineCount}/${testUrls.length} CDNs accessible`;
+            
+            resultsHtml = `<div class="status ${networkStatus}"><strong>${networkMessage}</strong></div>` + resultsHtml;
+            document.getElementById('network-status').innerHTML = resultsHtml;
+            
+            log(`✅ Network test complete: ${onlineCount}/${testUrls.length} CDNs accessible`);
+        }
+
+        async function testLocalFiles() {
+            log('📁 Testing local PDF.js files...');
+            updateStatus('local-files-status', '🔄 Testing local files...', 'info');
+            
+            const localFiles = [
+                '/pdf.min.js',
+                '/pdf.worker.min.js',
+                '/pdf-worker-fallback.js'
+            ];
+            
+            let availableCount = 0;
+            let resultsHtml = '';
+            
+            for (const file of localFiles) {
+                const accessible = await testUrlAccessibility(file, 3000);
+                if (accessible) availableCount++;
+                
+                resultsHtml += `<div class="status ${accessible ? 'success' : 'error'}">${file}: ${accessible ? '✅ Available' : '❌ Missing'}</div>`;
+                log(`${file}: ${accessible ? 'Available' : 'Missing'}`);
+            }
+            
+            const localStatus = availableCount === localFiles.length ? 'success' : (availableCount > 0 ? 'warning' : 'error');
+            const localMessage = `Local Files: ${availableCount}/${localFiles.length} available`;
+            
+            resultsHtml = `<div class="status ${localStatus}"><strong>${localMessage}</strong></div>` + resultsHtml;
+            document.getElementById('local-files-status').innerHTML = resultsHtml;
+            
+            log(`✅ Local files test complete: ${availableCount}/${localFiles.length} available`);
+        }
+
+        async function testPDFLoading() {
+            log('📄 Testing PDF loading functionality...');
+            updateStatus('pdf-loading-status', '🔄 Testing PDF loading...', 'info');
+            
+            try {
+                // Test if we can access the main application
+                const appResponse = await fetch('/api/documents');
+                const appWorking = appResponse.ok;
+                
+                let resultsHtml = `<div class="status ${appWorking ? 'success' : 'error'}">Main Application: ${appWorking ? '✅ Working' : '❌ Not responding'}</div>`;
+                
+                if (appWorking) {
+                    const documents = await appResponse.json();
+                    resultsHtml += `<div class="status info">Documents Available: ${documents.length}</div>`;
+                    
+                    if (documents.length > 0) {
+                        // Test PDF file access
+                        const firstDoc = documents[0];
+                        const pdfUrl = `/api/files/${firstDoc.filename}`;
+                        const pdfAccessible = await testUrlAccessibility(pdfUrl, 5000);
+                        
+                        resultsHtml += `<div class="status ${pdfAccessible ? 'success' : 'error'}">PDF File Access: ${pdfAccessible ? '✅ Working' : '❌ Failed'}</div>`;
+                        log(`PDF file access test: ${pdfAccessible ? 'Working' : 'Failed'}`);
+                    }
+                }
+                
+                document.getElementById('pdf-loading-status').innerHTML = resultsHtml;
+                log(`✅ PDF loading test complete`);
+                
+            } catch (error) {
+                updateStatus('pdf-loading-status', `❌ PDF loading test failed: ${error.message}`, 'error');
+                log(`❌ PDF loading test error: ${error.message}`);
+            }
+        }
+
+        // Initialize tests on page load
+        window.addEventListener('load', () => {
+            log('🚀 PDF.js Robust Fallback System Test initialized');
+            updateStatus('system-status', '✅ Test system ready', 'success');
+            
+            // Auto-run basic tests
+            setTimeout(() => {
+                testNetworkConnectivity();
+                setTimeout(() => testLocalFiles(), 1000);
+            }, 500);
+        });
+    </script>
+</body>
+</html>
